@@ -10,7 +10,7 @@ export const pool = new Pool({
   },
 });
 
-// Optional: quick test (you can comment this out later)
+
 export async function testDbConnection() {
   const result = await pool.query('SELECT NOW()');
   console.log('DB connected at:', result.rows[0].now);

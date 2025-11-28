@@ -1,4 +1,3 @@
-// backend/src/config/env.js
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -10,4 +9,5 @@ export const env = {
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   emailVerificationTokenHours: Number(process.env.EMAIL_VERIFICATION_TOKEN_HOURS || 24),
   mailerSendApiKey: process.env.MAILERSEND_API_KEY,
+  mailerSendFromName: process.env.MAILERSEND_FROM_NAME,
 };

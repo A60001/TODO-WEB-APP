@@ -2,6 +2,8 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { pool } from '../config/db.js';
+import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
 
 const SALT_ROUNDS = 10;
 
@@ -46,4 +48,37 @@ export async function createEmailVerificationToken(userId) {
 
   const result = await pool.query(query, values);
   return result.rows[0]; 
+}
+
+
+
+export async function authenticateUser(email, password) {
+  
+  const user = await findUserByEmail(email);
+
+  if (!user) {
+    return null;
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password_hash);
+
+  if (!isMatch) {
+    return null;
+  }
+
+  return user;
+}
+
+
+export function signAuthToken(user) {
+ 
+  const payload = {
+    userId: user.id,
+  };
+
+  const options = {
+    expiresIn: '30m', 
+  };
+
+  return jwt.sign(payload, env.jwtSecret, options);
 }
