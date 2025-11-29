@@ -72,3 +72,15 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- For adding column google_id in users table
+ALTER TABLE users
+ADD COLUMN google_id TEXT UNIQUE;
+
+
+
+-- Removing NOT NULL for password_hash in users table
+ALTER TABLE users
+ALTER COLUMN password_hash DROP NOT NULL;
+

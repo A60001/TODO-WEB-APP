@@ -1,3 +1,9 @@
+import { sendVerificationEmail } from '../utils/email.js';
+import jwt from 'jsonwebtoken';
+import { pool } from '../config/db.js';
+import { env } from '../config/env.js';
+import axios from 'axios';
+
 import {
   validateEmail,
   validatePassword,
@@ -10,9 +16,156 @@ import {
   authenticateUser,
   signAuthToken,
 } from '../services/auth.service.js';
-import { sendVerificationEmail } from '../utils/email.js';
-import { pool } from '../config/db.js';
-import { env } from '../config/env.js';
+
+
+
+export async function googleAuthStart(req, res, next) {
+  try {
+    const params = new URLSearchParams({
+      client_id: env.googleClientId,
+      redirect_uri: env.googleRedirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'offline',
+      prompt: 'consent',
+    });
+
+    const googleAuthUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    return res.redirect(googleAuthUrl);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
+export async function googleAuthCallback(req, res, next) {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).json({ message: 'Missing "code" in callback URL' });
+  }
+
+  try {
+
+    const tokenResponse = await axios.post(
+      'https://oauth2.googleapis.com/token',
+      new URLSearchParams({
+        code,
+        client_id: env.googleClientId,
+        client_secret: env.googleClientSecret,
+        redirect_uri: env.googleRedirectUri,
+        grant_type: 'authorization_code',
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+
+    const { access_token } = tokenResponse.data;
+
+    if (!access_token) {
+      return res.status(400).json({ message: 'Failed to get access token from Google' });
+    }
+
+
+    const userInfoResponse = await axios.get(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      }
+    );
+
+    const googleUser = userInfoResponse.data;
+
+
+    const googleId = googleUser.sub;
+    const email = googleUser.email;
+    const name = googleUser.name || '';
+
+    if (!email) {
+      return res.status(400).json({ message: 'Google account has no email' });
+    }
+
+
+    const client = await pool.connect();
+
+    let user;
+    try {
+      await client.query('BEGIN');
+
+
+      let result = await client.query(
+        'SELECT id, email, name, is_email_verified FROM users WHERE google_id = $1',
+        [googleId]
+      );
+
+      if (result.rows.length > 0) {
+        user = result.rows[0];
+      } else {
+
+        result = await client.query(
+          'SELECT id, email, name, is_email_verified FROM users WHERE email = $1',
+          [email]
+        );
+
+        if (result.rows.length > 0) {
+
+          user = result.rows[0];
+
+          await client.query(
+            `UPDATE users
+             SET google_id = $1,
+                 is_email_verified = TRUE,
+                 updated_at = NOW()
+             WHERE id = $2`,
+            [googleId, user.id]
+          );
+        } else {
+
+          const insert = await client.query(
+            `INSERT INTO users (email, name, google_id, is_email_verified)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, email, name, is_email_verified`,
+            [email, name, googleId, true]
+          );
+
+          user = insert.rows[0];
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+
+    const token = jwt.sign(
+      { userId: user.id },
+      env.jwtSecret,
+      { expiresIn: '30m' }
+    );
+
+    res.cookie('access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+
+
+    return res.redirect(`${env.clientUrl}/app`);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 
 
 export async function register(req, res, next) {
@@ -21,7 +174,7 @@ export async function register(req, res, next) {
     console.log('Headers:', req.headers);
     console.log('Body received:', req.body);
 
-    
+
     if (!req.body || typeof req.body !== 'object') {
       return res.status(400).json({
         message:
@@ -31,7 +184,7 @@ export async function register(req, res, next) {
 
     const { email, password, name } = req.body;
 
-    
+
     if (!email || !password) {
       return res.status(400).json({
         message: 'Email and password are required.',
@@ -45,7 +198,7 @@ export async function register(req, res, next) {
       });
     }
 
-    
+
     if (!validatePassword(password)) {
       return res.status(400).json({
         message:
@@ -53,14 +206,14 @@ export async function register(req, res, next) {
       });
     }
 
-    
+
     if (!validateName(name)) {
       return res.status(400).json({
         message: 'Name is invalid. Please provide a shorter valid name.',
       });
     }
 
-    
+
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({
@@ -68,20 +221,20 @@ export async function register(req, res, next) {
       });
     }
 
-    
+
     const user = await createUser({ email, name, password });
 
-    
+
     const verificationToken = await createEmailVerificationToken(user.id);
     console.log('Email verification token (DEV ONLY):', verificationToken.token);
 
-    
+
     const appBaseUrl =
       process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 
     const verificationUrl = `${appBaseUrl}/api/auth/verify-email?token=${verificationToken.token}`;
 
-    
+
     try {
       await sendVerificationEmail(user.email, verificationUrl);
     } catch (emailError) {
@@ -116,65 +269,67 @@ export async function login(req, res, next) {
 
     const { email, password } = req.body || {};
 
-   
+
     if (!email && !password) {
       return res.status(400).json({
         message: 'Email and password are both required.',
       });
     }
-    
+
     else if (!email) {
       return res.status(400).json({
         message: 'Email is required.',
       });
     }
-   
+
     else if (!password) {
       return res.status(400).json({
         message: 'Password is required.',
       });
     }
 
-    
-
-    
-
-    
     if (!validateEmail(email)) {
       return res.status(400).json({
         message: 'Please provide a valid email address.',
       });
     }
 
-    
+
     const user = await authenticateUser(email, password);
 
+
+    if (user && user.googleOnly) {
+      return res.status(400).json({
+        message: 'This account uses Google Sign-In. Please log in using Google instead.',
+      });
+    }
+
     if (!user) {
-      
       return res.status(401).json({
         message: 'Invalid email or password.',
       });
     }
 
-    
+
     if (!user.is_email_verified) {
       return res.status(403).json({
         message: 'Please verify your email before logging in.',
       });
     }
 
-    
+
+
     const token = signAuthToken(user);
 
-    
+
     res.cookie('access_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', 
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 30 * 60 * 1000, 
+      maxAge: 30 * 60 * 1000,
     });
 
-    
+
     return res.status(200).json({
       message: 'Login successful.',
       user: {
@@ -211,7 +366,7 @@ export function logout(req, res) {
 
 export async function verifyEmail(req, res, next) {
   try {
-    
+
     const { token } = req.query;
 
     if (!token) {
@@ -220,7 +375,7 @@ export async function verifyEmail(req, res, next) {
         .json({ message: 'Verification token is missing.' });
     }
 
-    
+
     const result = await pool.query(
       `
         SELECT
@@ -237,7 +392,7 @@ export async function verifyEmail(req, res, next) {
       [token]
     );
 
-    
+
     if (result.rows.length === 0) {
       return res.status(400).json({ message: 'Invalid verification token.' });
     }
@@ -274,7 +429,7 @@ export async function verifyEmail(req, res, next) {
     return res.redirect(redirectUrl);
   } catch (err) {
     console.error('Error in verifyEmail:', err);
-    
+
     return next(err);
   }
 }
@@ -283,7 +438,7 @@ export async function verifyEmail(req, res, next) {
 
 export async function getCurrentUser(req, res, next) {
   try {
-    
+
     const userId = req.user.id;
 
     const { rows } = await pool.query(
@@ -293,13 +448,13 @@ export async function getCurrentUser(req, res, next) {
       [userId]
     );
 
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const user = rows[0];
-    
+
     return res.json({
       id: user.id,
       email: user.email,
@@ -308,7 +463,7 @@ export async function getCurrentUser(req, res, next) {
       createdAt: user.created_at,
     });
   } catch (err) {
-    
+
     return next(err);
   }
 }

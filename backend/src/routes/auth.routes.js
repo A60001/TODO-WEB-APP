@@ -7,7 +7,9 @@ import {
     verifyEmail,
     login,
     getCurrentUser,
-    logout 
+    logout,
+    googleAuthStart,
+    googleAuthCallback
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
@@ -23,6 +25,11 @@ router.get('/verify-email', verifyEmail);
 router.get('/me', requireAuth, getCurrentUser);
 
 router.post('/logout', logout);
+
+router.get('/google', googleAuthStart);
+
+router.get('/google/callback', googleAuthCallback);
+
 
 export default router;
 
