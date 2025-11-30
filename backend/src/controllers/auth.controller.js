@@ -125,16 +125,24 @@ export async function googleAuthCallback(req, res, next) {
             [googleId, user.id]
           );
         } else {
-
-          const insert = await client.query(
+          
+          const insertUser = await client.query(
             `INSERT INTO users (email, name, google_id, is_email_verified)
              VALUES ($1, $2, $3, $4)
              RETURNING id, email, name, is_email_verified`,
             [email, name, googleId, true]
           );
 
-          user = insert.rows[0];
+          user = insertUser.rows[0];
+
+          
+          await client.query(
+            `INSERT INTO task_lists (user_id, name, sort_order, is_default)
+             VALUES ($1, $2, 0, TRUE)`,
+            [user.id, 'My List']
+          );
         }
+
       }
 
       await client.query('COMMIT');

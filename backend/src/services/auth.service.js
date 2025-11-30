@@ -30,9 +30,23 @@ export async function createUser({ email, name, password }) {
   `;
   const values = [email, name || null, passwordHash];
 
-  const result = await pool.query(query, [values[0], values[1], values[2]]);
-  return result.rows[0];
+  const result = await pool.query(query, values);
+  const user = result.rows[0];
+
+
+  const defaultListQuery = `
+    INSERT INTO task_lists (user_id, name, sort_order, is_default)
+    VALUES ($1, $2, 0, TRUE)
+  `;
+  const defaultListValues = [user.id, 'My List'];
+
+  await pool.query(defaultListQuery, defaultListValues);
+
+
+  return user;
+
 }
+
 
 
 export async function createEmailVerificationToken(userId) {

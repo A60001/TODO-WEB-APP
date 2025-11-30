@@ -84,3 +84,7 @@ ADD COLUMN google_id TEXT UNIQUE;
 ALTER TABLE users
 ALTER COLUMN password_hash DROP NOT NULL;
 
+
+-- A column to identify default lists:
+ALTER TABLE task_lists
+ADD COLUMN is_default BOOLEAN DEFAULT FALSE;

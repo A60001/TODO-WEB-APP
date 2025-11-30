@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.routes.js';
+import taskListRoutes from './routes/tasklists.routes.js';
+
 
 const app = express();
 
@@ -22,6 +24,9 @@ app.get('/health', (req, res) => {
 
 
 app.use('/api/auth', authRoutes);
+
+app.use('/api/lists', taskListRoutes);
+
 
 
 app.use((err, req, res, next) => {
