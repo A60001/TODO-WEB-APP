@@ -1,5 +1,5 @@
 import { pool } from '../config/db.js';
-import { getTaskListsForUser } from '../services/tasklists.service.js';
+import { getTaskListsForUser, createTaskListForUser, renameTaskListForUser  } from '../services/tasklists.service.js';
 
 export async function getTaskLists(req, res, next) {
   try {
@@ -12,6 +12,79 @@ export async function getTaskLists(req, res, next) {
     return next(err);
   }
 }
+
+
+
+
+
+export async function createTaskList(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { name } = req.body || {};
+
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ message: 'List name is required.' });
+    }
+
+    const trimmedName = name.trim();
+
+    if (trimmedName.length === 0) {
+      return res.status(400).json({ message: 'List name cannot be empty.' });
+    }
+
+    if (trimmedName.length > 100) {
+      return res.status(400).json({ message: 'List name is too long (max 100 characters).' });
+    }
+
+    
+    const newList = await createTaskListForUser(userId, trimmedName);
+
+    
+    return res.status(201).json({ list: newList });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+
+
+export async function renameTaskList(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const listId = req.params.id;
+    const { name } = req.body || {};
+
+    
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ message: 'List name is required.' });
+    }
+
+    const trimmedName = name.trim();
+
+    if (trimmedName.length === 0) {
+      return res.status(400).json({ message: 'List name cannot be empty.' });
+    }
+
+    if (trimmedName.length > 100) {
+      return res.status(400).json({ message: 'List name is too long (max 100 characters).' });
+    }
+
+    
+    const updatedList = await renameTaskListForUser(userId, listId, trimmedName);
+
+    if (!updatedList) {
+      return res.status(404).json({ message: 'List not found.' });
+    }
+
+
+    return res.json({ list: updatedList });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+
 
 
 

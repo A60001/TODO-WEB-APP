@@ -14,3 +14,52 @@ export async function getTaskListsForUser(userId) {
 
   return rows;
 }
+
+
+
+
+export async function createTaskListForUser(userId, name) {
+  const orderResult = await pool.query(
+    `
+      SELECT COALESCE(MAX(sort_order), -1) AS max_order
+      FROM task_lists
+      WHERE user_id = $1
+    `,
+    [userId]
+  );
+
+  const maxOrder = orderResult.rows[0].max_order;
+  const nextOrder = maxOrder + 1;
+
+  const insertResult = await pool.query(
+    `
+      INSERT INTO task_lists (user_id, name, sort_order, is_default)
+      VALUES ($1, $2, $3, FALSE)
+      RETURNING id, user_id, name, sort_order, is_default, created_at, updated_at
+    `,
+    [userId, name, nextOrder]
+  );
+
+  return insertResult.rows[0];
+}
+
+
+
+
+export async function renameTaskListForUser(userId, listId, newName) {
+  const updateResult = await pool.query(
+    `
+      UPDATE task_lists
+      SET name = $1,
+          updated_at = NOW()
+      WHERE id = $2
+        AND user_id = $3
+      RETURNING id, user_id, name, sort_order, is_default, created_at, updated_at
+    `,
+    [newName, listId, userId]
+  );
+
+  return updateResult.rows[0] || null;
+}
+
+

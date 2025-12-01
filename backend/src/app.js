@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.routes.js';
 import taskListRoutes from './routes/tasklists.routes.js';
 
 
+
 const app = express();
 
 
@@ -26,6 +27,9 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 app.use('/api/lists', taskListRoutes);
+
+
+
 
 
 
