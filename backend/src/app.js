@@ -5,11 +5,10 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.routes.js';
 import taskListRoutes from './routes/tasklists.routes.js';
-
+import tasksRoutes from './routes/tasks.routes.js';
 
 
 const app = express();
-
 
 app.use(helmet());
 app.use(cors({
@@ -28,10 +27,11 @@ app.use('/api/auth', authRoutes);
 
 app.use('/api/lists', taskListRoutes);
 
+app.use('/api/lists/:listId/tasks', tasksRoutes);
 
+app.use('/api/tasks', tasksRoutes);
 
-
-
+app.use('/api/lists/:listId/tasks', tasksRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -40,7 +40,5 @@ app.use((err, req, res, next) => {
     message: err.message || 'Something went wrong',
   });
 });
-
-
 
 export default app;

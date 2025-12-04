@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- To delete reminder_at column in tasks table
+ALTER TABLE tasks
+DROP COLUMN IF EXISTS reminder_at;
+
+
 
 -- For adding column google_id in users table
 ALTER TABLE users
